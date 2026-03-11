@@ -1,35 +1,87 @@
 const express = require("express");
 const app = express();
 const http = require("http").createServer(app);
-const io = require("socket.io")(http);
-
-let waitingPlayer = null;
-
-io.on("connection", (socket) => {
-  console.log("player connected");
-
-  if (waitingPlayer) {
-    const room = waitingPlayer.id + "#" + socket.id;
-
-    waitingPlayer.join(room);
-    socket.join(room);
-
-    io.to(room).emit("startGame");
-
-    waitingPlayer = null;
-  } else {
-    waitingPlayer = socket;
-  }
-
-  socket.on("move", (data) => {
-    socket.broadcast.emit("opponentMove", data);
-  });
-
-  socket.on("disconnect", () => {
-    console.log("player disconnected");
-  });
+const io = require("socket.io")(http, {
+  cors: { origin: "*" }
 });
 
-http.listen(3000, () => {
-  console.log("server running");
+let waitingPlayer = null;
+let rooms = {};
+
+io.on("connection", (socket) => {
+
+console.log("player connected");
+
+socket.on("randomMatch", () => {
+
+if(waitingPlayer){
+let room = waitingPlayer.id + "#" + socket.id;
+
+socket.join(room);
+waitingPlayer.join(room);
+
+rooms[room] = {
+p1Health:100,
+p2Health:100
+};
+
+io.to(room).emit("startGame", room);
+
+waitingPlayer = null;
+
+}else{
+waitingPlayer = socket;
+}
+
+});
+
+socket.on("createRoom",(code)=>{
+
+rooms[code] = {p1Health:100,p2Health:100};
+
+socket.join(code);
+
+});
+
+socket.on("joinRoom",(code)=>{
+
+if(rooms[code]){
+
+socket.join(code);
+io.to(code).emit("startGame",code);
+
+}
+
+});
+
+socket.on("attack",(data)=>{
+
+let room = data.room;
+
+if(!rooms[room]) return;
+
+rooms[room].p2Health -= 5;
+
+io.to(room).emit("healthUpdate", rooms[room]);
+
+});
+
+socket.on("move",(data)=>{
+
+socket.to(data.room).emit("opponentMove",data);
+
+});
+
+socket.on("disconnect",()=>{
+
+console.log("player disconnected");
+
+});
+
+});
+
+http.listen(3000,()=>{
+
+console.log("server running");
+
 });
