@@ -1,0 +1,35 @@
+const express = require("express");
+const app = express();
+const http = require("http").createServer(app);
+const io = require("socket.io")(http);
+
+let waitingPlayer = null;
+
+io.on("connection", (socket) => {
+  console.log("player connected");
+
+  if (waitingPlayer) {
+    const room = waitingPlayer.id + "#" + socket.id;
+
+    waitingPlayer.join(room);
+    socket.join(room);
+
+    io.to(room).emit("startGame");
+
+    waitingPlayer = null;
+  } else {
+    waitingPlayer = socket;
+  }
+
+  socket.on("move", (data) => {
+    socket.broadcast.emit("opponentMove", data);
+  });
+
+  socket.on("disconnect", () => {
+    console.log("player disconnected");
+  });
+});
+
+http.listen(3000, () => {
+  console.log("server running");
+});
